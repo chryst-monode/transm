@@ -17,6 +17,17 @@ Add entries in reverse chronological order (newest first). Each entry must inclu
 
 ## Changelog
 
+### 2026-04-07 — Wave 1-D: Stem Separation Wrapper & QA Modules
+- **Agent**: Claude Code (Opus 4.6) — sub-agent
+- **Branch**: (same as parent session)
+- **Files changed**:
+  - `src/transm/separation.py` (new) — StemSeparator class wrapping audio-separator
+  - `src/transm/stem_qa.py` (new) — assess_stems, estimate_bleed, estimate_artifacts, check_reconstruction
+  - `tests/test_separation.py` (new) — 7 tests (all @slow/@integration)
+  - `tests/test_stem_qa.py` (new) — 8 unit tests using synthetic stems
+- **Summary**: Implemented file-based audio-separator bridge (demucs/roformer backends, auto device detection, temp dir lifecycle, stem filename matching). Built spectral QA pipeline: bleed via STFT cross-correlation, artifacts via spectral flux in quiet passages, reconstruction error via RMS dB ratio. Tests NOT verified — sandbox denied pytest execution.
+- **State**: WIP (tests written but not run; parent agent must verify with `pytest tests/test_stem_qa.py -v`)
+
 ### 2026-04-07 — v0.1 Implementation (Wave 0: Foundation)
 - **Agent**: Claude Code (Opus 4.6)
 - **Branch**: feat/v0.1-implementation

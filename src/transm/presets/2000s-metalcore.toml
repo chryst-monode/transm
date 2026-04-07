@@ -1,0 +1,44 @@
+[metadata]
+name = "2000s Metalcore"
+description = "Aggressive drum transient restoration, cymbal taming, bass recovery"
+
+[drums]
+transient_attack_db = 4.5
+transient_sustain_db = -2.0
+expander_threshold_db = -30.0
+expander_ratio = 1.5
+high_shelf_gain_db = -3.0
+high_shelf_freq_hz = 8000.0
+low_shelf_gain_db = 2.0
+low_shelf_freq_hz = 80.0
+
+[vocals]
+deesser_freq_low_hz = 6000.0
+deesser_freq_high_hz = 9000.0
+expander_ratio = 1.2
+presence_gain_db = 1.5
+presence_freq_hz = 4000.0
+level_adjust_db = -1.5
+
+[bass]
+hp_freq_hz = 30.0
+mud_cut_freq_hz = 250.0
+mud_cut_gain_db = -3.0
+mud_cut_q = 2.0
+harmonic_freq_hz = 1000.0
+harmonic_gain_db = 2.0
+comp_ratio = 2.0
+comp_attack_ms = 30.0
+
+[other]
+mid_boost_low_hz = 500.0
+mid_boost_high_hz = 2000.0
+mid_boost_gain_db = 2.0
+high_shelf_gain_db = -2.0
+high_shelf_freq_hz = 10000.0
+stereo_width = 1.2
+
+[global]
+intensity = 0.35
+target_lufs = -14.0
+target_true_peak_dbtp = -1.0
