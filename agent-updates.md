@@ -17,6 +17,13 @@ Add entries in reverse chronological order (newest first). Each entry must inclu
 
 ## Changelog
 
+### 2026-04-07 — v0.1 Implementation (Wave 0: Foundation)
+- **Agent**: Claude Code (Opus 4.6)
+- **Branch**: feat/v0.1-implementation
+- **Files changed**: pyproject.toml, src/transm/__init__.py, src/transm/types.py, src/transm/audio_io.py, src/transm/dsp/__init__.py, src/transm/presets/__init__.py, tests/__init__.py, tests/conftest.py, tests/test_audio_io.py
+- **Summary**: Wave 0 foundation — all type contracts (AudioBuffer, Metrics, PresetParams, StemSet, PipelineResult), audio I/O with soundfile/librosa fallback, synthetic test generators, 8 passing tests. Waves 1-4 build on these interfaces.
+- **State**: in-progress (Wave 0 complete, Waves 1-4 pending)
+
 ### 2026-04-07 — Repository setup and fork workflow
 - **Agent**: Claude Code (Opus 4.6)
 - **Branch**: main
