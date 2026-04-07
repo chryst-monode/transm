@@ -12,6 +12,7 @@ Transm separates crushed masters into individual stems using state-of-the-art AI
 
 - [Architecture](docs/architecture.md) — Technical architecture, pipeline design, tech stack, and roadmap
 - [Feasibility Assessment](docs/feasibility-assessment.md) — Honest difficulty estimates, model fine-tuning feasibility, and adversarial analysis review
+- [Agent Updates](agent-updates.md) — Changelog of all agent-authored changes
 
 ## Planned Stack
 
@@ -20,9 +21,11 @@ Transm separates crushed masters into individual stems using state-of-the-art AI
 - **Analysis**: `pyloudnorm`, `librosa`
 - **Mastering** (optional): `matchering`
 
-## Contributors
+## Contributing
 
-This project is co-created by [@TeeYum](https://github.com/TeeYum), [@chryst-monode](https://github.com/chryst-monode), and [Claude](https://claude.ai).
+This project uses a fork-based workflow. All development happens on the [chryst-monode fork](https://github.com/chryst-monode/transm) and is proposed to this repo via pull request. See [CLAUDE.md](CLAUDE.md) for agent-specific instructions.
+
+All commits are co-created by [@TeeYum](https://github.com/TeeYum), [@chryst-monode](https://github.com/chryst-monode), and [Claude](https://claude.ai).
 
 ## License
 
