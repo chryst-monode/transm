@@ -140,8 +140,15 @@ def _match_stems(
     # Build a mapping from canonical stem name to the output file path
     found: dict[str, Path] = {}
 
-    # Prefer output_files list if provided
-    candidates: list[Path] = [Path(f) for f in output_files] if output_files else []
+    # Prefer output_files list if provided.
+    # audio-separator may return bare filenames (not full paths),
+    # so resolve them against output_dir if they don't exist as-is.
+    candidates: list[Path] = []
+    for f in (output_files or []):
+        p = Path(f)
+        if not p.exists():
+            p = output_dir / p.name
+        candidates.append(p)
 
     # Also scan the output dir for any files we might have missed
     if output_dir.exists():

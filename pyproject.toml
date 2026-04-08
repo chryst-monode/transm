@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-separator = ["audio-separator>=0.21"]
+separator = ["audio-separator>=0.21", "onnxruntime>=1.17"]
 gpu = ["audio-separator[gpu]"]
 perf = ["numba>=0.58"]
 dev = [
