@@ -41,6 +41,9 @@ Thumbs.db
 *.bin
 models/weights/
 
+# Internal planning (not public)
+TODO.md
+
 # Output
 output/
 *_output/

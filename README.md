@@ -6,17 +6,29 @@ Transm separates crushed masters into individual stems using state-of-the-art AI
 
 ## Demo: Before / After
 
-As I Lay Dying — "94 Hours" (10s clip, 0:30–0:40). Processed with the `2000s-metalcore` preset at intensity 0.7.
+All clips processed with the `2000s-metalcore` preset at intensity 0.7. Download and A/B compare.
 
-- [Original clip](docs/samples/aild_94hours_original_clip.wav) (heavily compressed, -12.5 LUFS)
-- [Remastered clip](docs/samples/aild_94hours_transm_70_clip.wav) (restored dynamics, -14.0 LUFS, +4.4 dB crest factor)
+### As I Lay Dying — "94 Hours" (10s clip, 0:30–0:40)
+
+- [Original clip](docs/samples/aild_94hours_original_clip.wav) (-12.5 LUFS)
+- [Remastered clip](docs/samples/aild_94hours_transm_70_clip.wav) (-14.0 LUFS, +4.4 dB crest factor)
 
 | Metric | Before | After | Change |
 |--------|--------|-------|--------|
 | Crest Factor | 12.4 dB | 16.8 dB | **+4.4 dB** |
 | Peak-to-Loudness Ratio | 8.3 dB | 13.2 dB | **+4.8 dB** |
 | True Peak | -4.2 dBTP | -1.0 dBTP | -3.2 dB |
-| Clipping | 0.00% | 0.00% | -- |
+
+### Darkest Hour — "Sound The Surrender" (10s clip, 0:45–0:55)
+
+- [Original clip](docs/samples/dh_sound_the_surrender_original_clip.wav) (-8.5 LUFS, clipping at +1.5 dBTP)
+- [Remastered clip](docs/samples/dh_sound_the_surrender_transm_70_clip.wav) (-14.0 LUFS, +2.1 dB crest factor)
+
+| Metric | Before | After | Change |
+|--------|--------|-------|--------|
+| Crest Factor | 12.9 dB | 15.0 dB | **+2.1 dB** |
+| Peak-to-Loudness Ratio | 10.0 dB | 12.3 dB | **+2.3 dB** |
+| True Peak | +1.5 dBTP | -1.7 dBTP | -3.1 dB |
 
 > Audio clips are short excerpts used for technical demonstration of audio processing. All rights belong to the original artists.
 
