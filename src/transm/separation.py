@@ -29,6 +29,16 @@ _STEM_PATTERNS: dict[str, list[str]] = {
 }
 
 
+def check_separator_available() -> bool:
+    """Return True if audio-separator and its runtime deps (onnxruntime) are importable."""
+    try:
+        from audio_separator.separator import Separator  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 class StemSeparator:
     """Separate audio into 4 stems using audio-separator."""
 

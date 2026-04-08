@@ -21,7 +21,13 @@ from transm.audio_io import read_audio, write_audio
 from transm.pipeline import Pipeline
 from transm.preset_loader import load_preset, load_preset_from_file, scale_by_intensity
 from transm.report import format_comparison_table, format_metrics_table, metrics_to_json
-from transm.separation import StemSeparator
+from transm.separation import StemSeparator, check_separator_available
+
+_SEPARATOR_INSTALL_MSG = (
+    "Stem separation requires additional dependencies.\n"
+    "Install with: pip install transm[separator]\n"
+    "Note: requires Python 3.11 or 3.12 (onnxruntime lacks 3.13 support)."
+)
 
 app = typer.Typer(
     name="transm",
@@ -63,8 +69,15 @@ def separate(
     ),
     model: str = typer.Option(None, help="Specific model name/filename"),
 ) -> None:
-    """Separate audio into stems (vocals, drums, bass, other)."""
+    """Separate audio into stems (vocals, drums, bass, other).
+
+    Requires: pip install transm[separator]
+    """
     try:
+        if not check_separator_available():
+            _err_console().print(f"[bold red]Error:[/bold red] {_SEPARATOR_INSTALL_MSG}")
+            raise SystemExit(1)
+
         if output_dir is None:
             output_dir = input_file.parent / f"{input_file.stem}_stems"
 
@@ -107,8 +120,15 @@ def process(
     output_format: str = typer.Option("wav", "--format", help="Output format: wav, flac"),
     json_output: bool = typer.Option(False, "--json", help="Output metrics as JSON"),
 ) -> None:
-    """Full remastering pipeline: separate, process stems, remix."""
+    """Full remastering pipeline: separate, process stems, remix.
+
+    Requires: pip install transm[separator]
+    """
     try:
+        if not check_separator_available():
+            _err_console().print(f"[bold red]Error:[/bold red] {_SEPARATOR_INSTALL_MSG}")
+            raise SystemExit(1)
+
         # 0. Validate output format
         valid_formats = ("wav", "flac")
         if output_format.lower() not in valid_formats:

@@ -10,7 +10,10 @@ from pathlib import Path
 
 import pytest
 
-from transm.separation import StemSeparator
+from transm.separation import StemSeparator, check_separator_available
+
+# True if audio-separator + onnxruntime are importable in this environment
+_SEPARATOR_AVAILABLE = check_separator_available()
 
 
 class TestStemSeparator:
@@ -54,51 +57,60 @@ class TestStemSeparator:
         with pytest.raises(FileNotFoundError):
             sep.separate(Path("/nonexistent/audio.wav"))
 
-    def test_separator_dependency_diagnostic(self) -> None:
-        """Verify separator can be constructed — catches missing onnxruntime early."""
-        try:
-            sep = StemSeparator()
-            assert sep.backend == "demucs"
-        except ImportError as e:
-            pytest.skip(f"Separator dependencies not available: {e}")
 
-    @pytest.mark.slow
-    @pytest.mark.integration
-    def test_separate_synthetic(self, tmp_path: Path) -> None:
-        """Integration: separate a short synthetic WAV and verify StemSet structure.
+def test_separator_import_check() -> None:
+    """check_separator_available() actually tests the real import chain.
 
-        This test downloads the model on first run and is slow.
-        """
-        import numpy as np
-        import soundfile as sf
+    This catches missing onnxruntime in the default test suite — unlike
+    constructing StemSeparator (which defers the import to separate()).
+    """
+    result = check_separator_available()
+    assert isinstance(result, bool)
+    if not result:
+        # Not a failure — just document that separation won't work
+        pytest.skip(
+            "audio-separator or onnxruntime not importable. "
+            "Stem separation unavailable. Install with: pip install transm[separator]"
+        )
 
-        # Create a short (3s) synthetic mix of 4 sine waves
-        sr = 44100
-        duration = 3.0
-        t = np.arange(int(sr * duration), dtype=np.float32) / sr
 
-        # Simulate a simple mix: low bass, mid vocal, high "other", percussive hit
-        bass = 0.3 * np.sin(2 * np.pi * 80 * t)
-        vocal = 0.3 * np.sin(2 * np.pi * 440 * t)
-        other = 0.2 * np.sin(2 * np.pi * 2000 * t)
-        drums = 0.2 * np.sin(2 * np.pi * 150 * t) * np.exp(-t * 3)
+@pytest.mark.slow
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not _SEPARATOR_AVAILABLE,
+    reason="audio-separator/onnxruntime not available — skip integration test",
+)
+def test_separate_synthetic(tmp_path: Path) -> None:
+    """Integration: separate a short synthetic WAV and verify StemSet structure.
 
-        mix = (bass + vocal + other + drums).astype(np.float32)
-        stereo = np.column_stack([mix, mix])
+    This test downloads the model on first run and is slow.
+    """
+    import numpy as np
+    import soundfile as sf
 
-        input_path = tmp_path / "test_mix.wav"
-        sf.write(str(input_path), stereo, sr)
+    sr = 44100
+    duration = 3.0
+    t = np.arange(int(sr * duration), dtype=np.float32) / sr
 
-        sep = StemSeparator()
-        stem_set = sep.separate(input_path)
+    bass = 0.3 * np.sin(2 * np.pi * 80 * t)
+    vocal = 0.3 * np.sin(2 * np.pi * 440 * t)
+    other = 0.2 * np.sin(2 * np.pi * 2000 * t)
+    drums = 0.2 * np.sin(2 * np.pi * 150 * t) * np.exp(-t * 3)
 
-        # Verify structure
-        assert stem_set.vocals.sample_rate == sr
-        assert stem_set.drums.sample_rate == sr
-        assert stem_set.bass.sample_rate == sr
-        assert stem_set.other.sample_rate == sr
+    mix = (bass + vocal + other + drums).astype(np.float32)
+    stereo = np.column_stack([mix, mix])
 
-        # All stems should have audio data
-        for name, stem in stem_set.items():
-            assert stem.num_samples > 0, f"{name} stem has no samples"
-            assert stem.num_channels == 2, f"{name} stem is not stereo"
+    input_path = tmp_path / "test_mix.wav"
+    sf.write(str(input_path), stereo, sr)
+
+    sep = StemSeparator()
+    stem_set = sep.separate(input_path)
+
+    assert stem_set.vocals.sample_rate == sr
+    assert stem_set.drums.sample_rate == sr
+    assert stem_set.bass.sample_rate == sr
+    assert stem_set.other.sample_rate == sr
+
+    for name, stem in stem_set.items():
+        assert stem.num_samples > 0, f"{name} stem has no samples"
+        assert stem.num_channels == 2, f"{name} stem is not stereo"

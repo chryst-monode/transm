@@ -16,7 +16,8 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
+    # Python 3.13 not listed: onnxruntime (required by audio-separator) lacks 3.13 wheels.
+    # Analysis/DSP/CLI work on 3.13, but stem separation does not.
     "Topic :: Multimedia :: Sound/Audio :: Analysis",
     "Topic :: Multimedia :: Sound/Audio :: Sound Synthesis",
 ]
