@@ -17,6 +17,15 @@ Add entries in reverse chronological order (newest first). Each entry must inclu
 
 ## Changelog
 
+### 2026-04-09 — Fix capture: redirect URI + CoreAudio crash
+- **Agent**: Claude Code (Opus 4.6)
+- **Branch**: feat/capture
+- **Files changed**:
+  - `src/transm/spotify_auth.py` — redirect URI changed from `http://localhost` to `http://127.0.0.1` (Spotify Dashboard rejects http://localhost, and https://localhost causes self-signed cert issues)
+  - `src/transm/capture.py` — chunk-based recording with stop event to fix CoreAudio thread teardown crash; non-daemon recording thread
+- **Summary**: Two fixes for the capture module (PR #7). (1) Spotify PKCE redirect URI updated to `http://127.0.0.1:8765/callback` — the only form the Spotify Dashboard accepts for local dev. (2) CoreAudio crash fix: replaced single blocking `recorder.record()` call with 1-second chunk loop checking a `threading.Event`. On error/cancellation, the stop event is set, the chunk loop exits, and the recorder context manager closes cleanly — preventing the pthread_exit-from-workgroup crash. Recording thread changed from daemon to regular.
+- **State**: clean
+
 ### 2026-04-07 — v0.1 Implementation Complete
 - **Agent**: Claude Code (Opus 4.6) — orchestrator + 8 sub-agents
 - **Branch**: feat/v0.1-implementation

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 _TOKEN_PATH = Path.home() / ".config" / "transm" / "spotify.json"
 _REDIRECT_PORT = 8765
-_REDIRECT_URI = f"http://localhost:{_REDIRECT_PORT}/callback"
+_REDIRECT_URI = f"http://127.0.0.1:{_REDIRECT_PORT}/callback"
 _AUTH_URL = "https://accounts.spotify.com/authorize"
 _TOKEN_URL = "https://accounts.spotify.com/api/token"
 _SCOPES = "user-read-playback-state user-modify-playback-state user-read-currently-playing"
@@ -133,7 +133,7 @@ def login() -> str:
         def log_message(self, format: str, *args: object) -> None:
             pass  # Suppress server logs
 
-    server = http.server.HTTPServer(("localhost", _REDIRECT_PORT), CallbackHandler)
+    server = http.server.HTTPServer(("127.0.0.1", _REDIRECT_PORT), CallbackHandler)
     server.timeout = 120  # Overall timeout for the server
 
     def _serve_until_result() -> None:

@@ -13,6 +13,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -122,10 +123,13 @@ def record_loopback(
     device_name: str,
     duration_s: float,
     sample_rate: int | None = None,
+    stop_event: threading.Event | None = None,
 ) -> AudioBuffer:
     """Record audio from a loopback device for the specified duration.
 
     If sample_rate is None, attempts to detect the device's native rate.
+    If stop_event is set, recording stops early and the recorder context
+    manager exits cleanly — preventing CoreAudio thread teardown crashes.
     """
     try:
         import soundcard  # type: ignore[import-untyped]
@@ -156,6 +160,7 @@ def record_loopback(
         raise RuntimeError(msg)
 
     num_frames = int(duration_s * sample_rate)
+    chunk_frames = sample_rate  # 1-second chunks
     logger.info(
         "Recording from '%s' for %.1fs at %d Hz...",
         device.name,
@@ -163,9 +168,24 @@ def record_loopback(
         sample_rate,
     )
 
+    chunks: list[np.ndarray] = []
+    recorded = 0
     with device.recorder(samplerate=sample_rate, channels=2) as recorder:
-        data = recorder.record(numframes=num_frames)
+        while recorded < num_frames:
+            if stop_event is not None and stop_event.is_set():
+                logger.info("Recording stopped early by stop event.")
+                break
+            remaining = num_frames - recorded
+            n = min(chunk_frames, remaining)
+            chunks.append(recorder.record(numframes=n))
+            recorded += n
 
+    if not chunks:
+        return AudioBuffer(
+            data=np.empty((0, 2), dtype=np.float32), sample_rate=sample_rate
+        )
+
+    data = np.concatenate(chunks, axis=0)
     return AudioBuffer(data=data.astype(np.float32), sample_rate=sample_rate)
 
 
@@ -317,10 +337,10 @@ def capture_track(
     # 3. Start recording FIRST (captures silence during pre-roll)
     #    Then start playback while recording is running.
     #    Always pause playback in finally, even if recording fails.
-    #    Always wait for the recording thread to exit so the audio device
-    #    is released deterministically.
-    import threading
-
+    #    The stop_event lets us cancel recording cleanly on error —
+    #    the recorder context manager exits properly, preventing the
+    #    CoreAudio IO thread teardown crash (pthread_exit from workgroup).
+    stop_event = threading.Event()
     recording_result: dict[str, AudioBuffer | Exception] = {}
 
     def _do_record() -> None:
@@ -328,11 +348,12 @@ def capture_track(
             recording_result["buffer"] = record_loopback(
                 device_name=device_name,
                 duration_s=total_record_s,
+                stop_event=stop_event,
             )
         except Exception as e:
             recording_result["error"] = e
 
-    record_thread = threading.Thread(target=_do_record, daemon=True)
+    record_thread = threading.Thread(target=_do_record)
     record_thread.start()
 
     # Small delay to ensure recorder is listening before playback starts
@@ -348,12 +369,13 @@ def capture_track(
         # 6. Always pause playback
         pause_playback(token)
 
-        # 7. Always wait for the recording thread to fully exit so the
-        #    audio device is released. If it's still running after our
-        #    first join (timeout or exception path), block here.
+        # 7. Signal the recorder to stop and wait for clean shutdown.
+        #    The chunk-based recorder checks stop_event between 1s chunks,
+        #    so the context manager __exit__ runs and CoreAudio cleans up.
         if record_thread.is_alive():
-            logger.warning("Recording thread still active — waiting for device release...")
-            record_thread.join(timeout=10)
+            logger.info("Signaling recording thread to stop...")
+            stop_event.set()
+            record_thread.join(timeout=15)
             if record_thread.is_alive():
                 logger.error(
                     "Recording thread did not exit within timeout. "
