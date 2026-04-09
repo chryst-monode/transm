@@ -105,23 +105,17 @@ def pause_playback(token: str) -> None:
         )
 
 
-def detect_device_sample_rate(device_name: str) -> int:
-    """Detect the native sample rate of a loopback device.
+_DEFAULT_SAMPLE_RATE = 44100
 
-    Falls back to 44100 if detection fails.
+
+def _default_sample_rate() -> int:
+    """Return the default capture sample rate.
+
+    soundcard does not expose device native sample rates.
+    When real detection is needed, this should be replaced with
+    platform-specific queries (CoreAudio on macOS, etc.).
     """
-    try:
-        import soundcard  # type: ignore[import-untyped]
-
-        mics = soundcard.all_microphones(include_loopback=True)
-        for mic in mics:
-            if device_name.lower() in mic.name.lower():
-                # soundcard doesn't expose native sample rate directly,
-                # but we can check common rates
-                return 44100
-    except Exception:
-        pass
-    return 44100
+    return _DEFAULT_SAMPLE_RATE
 
 
 def record_loopback(
@@ -143,7 +137,7 @@ def record_loopback(
         raise ImportError(msg) from e
 
     if sample_rate is None:
-        sample_rate = detect_device_sample_rate(device_name)
+        sample_rate = _default_sample_rate()
 
     # Find the loopback device
     mics = soundcard.all_microphones(include_loopback=True)
@@ -323,6 +317,8 @@ def capture_track(
     # 3. Start recording FIRST (captures silence during pre-roll)
     #    Then start playback while recording is running.
     #    Always pause playback in finally, even if recording fails.
+    #    Always wait for the recording thread to exit so the audio device
+    #    is released deterministically.
     import threading
 
     recording_result: dict[str, AudioBuffer | Exception] = {}
@@ -351,6 +347,18 @@ def capture_track(
     finally:
         # 6. Always pause playback
         pause_playback(token)
+
+        # 7. Always wait for the recording thread to fully exit so the
+        #    audio device is released. If it's still running after our
+        #    first join (timeout or exception path), block here.
+        if record_thread.is_alive():
+            logger.warning("Recording thread still active — waiting for device release...")
+            record_thread.join(timeout=10)
+            if record_thread.is_alive():
+                logger.error(
+                    "Recording thread did not exit within timeout. "
+                    "Audio device may remain busy."
+                )
 
     # Check for recording errors
     if "error" in recording_result:

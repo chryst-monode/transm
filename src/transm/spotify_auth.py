@@ -72,24 +72,28 @@ def login() -> str:
     }
     auth_url = f"{_AUTH_URL}?{urllib.parse.urlencode(params)}"
 
-    # Start local server to catch the callback
+    # Start local server to catch the callback.
+    # Server loops until a terminal response (valid code or Spotify error) is received,
+    # ignoring stray requests to other paths or malformed callbacks.
     result_holder: dict[str, str] = {}
+    import html as _html
 
     class CallbackHandler(http.server.BaseHTTPRequestHandler):
         def do_GET(self) -> None:
             parsed = urllib.parse.urlparse(self.path)
 
-            # Only accept the callback path
+            # Ignore anything that isn't the callback path — keeps server alive
             if parsed.path != "/callback":
                 self.send_response(404)
                 self.end_headers()
+                self.wfile.write(b"Not found")
                 return
 
             qs = urllib.parse.parse_qs(parsed.query)
 
-            # Check for Spotify error responses
+            # Check for Spotify error responses (terminal — stop server)
             if "error" in qs:
-                error = qs["error"][0]
+                error = _html.escape(qs["error"][0])
                 result_holder["error"] = error
                 self.send_response(400)
                 self.send_header("Content-Type", "text/html")
@@ -99,7 +103,7 @@ def login() -> str:
                 )
                 return
 
-            # Validate state to prevent CSRF
+            # Validate state to prevent CSRF (terminal on mismatch — stop server)
             returned_state = qs.get("state", [None])[0]
             if returned_state != expected_state:
                 result_holder["error"] = "state_mismatch"
@@ -111,7 +115,7 @@ def login() -> str:
                 )
                 return
 
-            # Extract authorization code
+            # Extract authorization code (terminal on missing — stop server)
             if "code" not in qs:
                 result_holder["error"] = "no_code"
                 self.send_response(400)
@@ -130,7 +134,14 @@ def login() -> str:
             pass  # Suppress server logs
 
     server = http.server.HTTPServer(("localhost", _REDIRECT_PORT), CallbackHandler)
-    server_thread = threading.Thread(target=server.handle_request, daemon=True)
+    server.timeout = 120  # Overall timeout for the server
+
+    def _serve_until_result() -> None:
+        """Handle requests until we get a terminal result (code or error)."""
+        while "code" not in result_holder and "error" not in result_holder:
+            server.handle_request()
+
+    server_thread = threading.Thread(target=_serve_until_result, daemon=True)
     server_thread.start()
 
     logger.info("Opening browser for Spotify login...")
