@@ -1,6 +1,6 @@
 # Transm (Transmute AI)
 
-**Open-source AI-powered remastering for Loudness War-era metal and rock.**
+**Open-source AI-powered remastering for early-era metal and metalcore.**
 
 Transm separates crushed masters into individual stems using state-of-the-art AI models, applies genre-aware DSP processing to restore dynamics and reduce fatigue, and remixes them with proper headroom. Built for audiophiles who want their 2000s metalcore to sound less like it was mastered inside a trash compactor.
 
