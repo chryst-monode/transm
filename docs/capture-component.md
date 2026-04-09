@@ -1,5 +1,11 @@
 # Transm Capture: Lossless Stream Capture Component
 
+> **Implementation status (v0.1):** Single-track capture only. Given a Spotify
+> URL, starts loopback recording, triggers playback, waits for track duration,
+> trims silence, saves tagged FLAC. Multi-track album capture, silence-based
+> boundary detection, streaming-to-disk encoding, and non-Spotify source support
+> are planned but not yet implemented. See `transm capture --help` for current CLI.
+
 ## Overview
 
 Transm Capture is a local system audio capture module that records lossless audio from any streaming service (Spotify, Apple Music, Tidal, Qobuz, Deezer) by capturing the decoded audio output at the OS level. It encodes to FLAC in real-time, automatically detects track boundaries, and enriches output files with metadata from the Spotify API.

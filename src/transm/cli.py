@@ -233,5 +233,77 @@ def compare(
         raise SystemExit(1) from exc
 
 
+@app.command()
+def capture(
+    source: str = typer.Argument(None, help="Spotify URL or URI to capture"),
+    output_dir: Path = typer.Option(
+        None, "--output", "-o", help="Output directory for captured FLAC"
+    ),
+    device: str = typer.Option(
+        "BlackHole 2ch", "--device", "-d", help="Loopback audio device name"
+    ),
+    login_flag: bool = typer.Option(False, "--login", help="Authenticate with Spotify"),
+    list_devices: bool = typer.Option(
+        False, "--list-devices", help="List available audio input devices"
+    ),
+    do_analyze: bool = typer.Option(False, "--analyze", help="Analyze captured audio"),
+) -> None:
+    """Capture a track via loopback recording from a streaming service."""
+    try:
+        if list_devices:
+            from transm.capture import list_loopback_devices
+
+            devices = list_loopback_devices()
+            typer.echo("Available audio input devices:")
+            for d in devices:
+                typer.echo(f"  {d}")
+            return
+
+        if login_flag:
+            from transm.spotify_auth import login
+
+            login()
+            typer.echo("Spotify authentication successful.")
+            return
+
+        if source is None:
+            _err_console().print(
+                "[bold red]Error:[/bold red] Provide a Spotify URL to capture, "
+                "or use --login / --list-devices."
+            )
+            raise SystemExit(1)
+
+        from transm.capture import capture_track
+
+        if output_dir is None:
+            output_dir = Path.home() / "Music" / "transm-captures"
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            TimeElapsedColumn(),
+        ) as progress:
+            task = progress.add_task("Capturing...", total=None)
+            output_path = capture_track(
+                spotify_url=source,
+                output_dir=output_dir,
+                device_name=device,
+            )
+            progress.update(task, description="Done", completed=1, total=1)
+
+        typer.echo(f"Captured: {output_path}")
+
+        if do_analyze:
+            buffer = read_audio(output_path)
+            metrics = compute_metrics(buffer)
+            typer.echo(format_metrics_table(metrics))
+
+    except SystemExit:
+        raise
+    except Exception as exc:
+        _err_console().print(f"[bold red]Error:[/bold red] {exc}")
+        raise SystemExit(1) from exc
+
+
 if __name__ == "__main__":
     app()

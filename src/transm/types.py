@@ -201,6 +201,24 @@ class StemSet:
 
 
 @dataclass(frozen=True)
+class TrackMetadata:
+    """Metadata for a captured audio track."""
+
+    title: str
+    artist: str
+    album: str
+    album_artist: str = ""
+    track_number: int = 0
+    disc_number: int = 1
+    duration_ms: int = 0
+    isrc: str = ""
+    source_uri: str = ""
+    release_date: str = ""
+    genre: list[str] = field(default_factory=list)
+    album_art_url: str = ""
+
+
+@dataclass(frozen=True)
 class PipelineResult:
     """Result of a full pipeline run."""
 

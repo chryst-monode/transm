@@ -41,8 +41,9 @@ Thumbs.db
 *.bin
 models/weights/
 
-# Internal planning (not public)
+# Internal coordination & roadmap
 TODO.md
+agent-updates.md
 
 # Output
 output/
