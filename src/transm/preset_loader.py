@@ -11,6 +11,7 @@ from transm.types import (
     BassParams,
     DrumsParams,
     GlobalParams,
+    MixParams,
     OtherParams,
     PresetParams,
     VocalsParams,
@@ -53,6 +54,7 @@ def _toml_to_preset(data: dict[str, Any]) -> PresetParams:
         bass=BassParams(**data["bass"]) if "bass" in data else BassParams(),
         other=OtherParams(**data["other"]) if "other" in data else OtherParams(),
         global_params=GlobalParams(**data["global"]) if "global" in data else GlobalParams(),
+        mix=MixParams(**data["mix"]) if "mix" in data else MixParams(),
     )
 
 
@@ -188,6 +190,15 @@ def validate_preset(params: PresetParams) -> list[str]:
     _check_freq("other", "mid_boost_high_hz", o.mid_boost_high_hz)
     _check_freq("other", "high_shelf_freq_hz", o.high_shelf_freq_hz)
 
+    # Mix levels
+    m = params.mix
+    for stem_name in ("drums_db", "vocals_db", "bass_db", "other_db"):
+        val = getattr(m, stem_name)
+        if abs(val) > 6.0:
+            warnings.append(
+                f"mix.{stem_name} = {val} dB is outside expected range (±6 dB)"
+            )
+
     # Global
     g = params.global_params
     if g.intensity < 0.0 or g.intensity > 1.0:
@@ -230,4 +241,5 @@ def scale_by_intensity(params: PresetParams, intensity: float) -> PresetParams:
             target_lufs=params.global_params.target_lufs,
             target_true_peak_dbtp=params.global_params.target_true_peak_dbtp,
         ),
+        mix=params.mix,  # Mix levels are absolute balance, not scaled by intensity
     )

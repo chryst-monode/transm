@@ -167,6 +167,16 @@ class GlobalParams:
 
 
 @dataclass(frozen=True)
+class MixParams:
+    """Per-stem level adjustments applied at remix time (dB)."""
+
+    drums_db: float = 0.0
+    vocals_db: float = 0.0
+    bass_db: float = 0.0
+    other_db: float = 0.0
+
+
+@dataclass(frozen=True)
 class PresetParams:
     """All tunable parameters for a processing preset."""
 
@@ -177,6 +187,7 @@ class PresetParams:
     bass: BassParams = field(default_factory=BassParams)
     other: OtherParams = field(default_factory=OtherParams)
     global_params: GlobalParams = field(default_factory=GlobalParams)
+    mix: MixParams = field(default_factory=MixParams)
 
 
 @dataclass(frozen=True)

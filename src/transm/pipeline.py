@@ -123,7 +123,7 @@ class Pipeline:
 
         # 6. Remix
         _report(progress, "Remixing...", 0.88)
-        remixed = remix_stems(processed_stems, original)
+        remixed = remix_stems(processed_stems, original, mix_params=self.preset.mix)
 
         # 7. Final limiting
         _report(progress, "Applying final limiter...", 0.92)

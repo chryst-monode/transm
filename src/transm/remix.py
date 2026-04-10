@@ -4,21 +4,24 @@ from __future__ import annotations
 
 import numpy as np
 
-from transm.types import AudioBuffer, StemSet
+from transm.dsp.common import db_to_linear
+from transm.types import AudioBuffer, MixParams, StemSet
 
 
 def remix_stems(
     stems: StemSet,
     original: AudioBuffer,
+    mix_params: MixParams | None = None,
 ) -> AudioBuffer:
     """Sum processed stems back together with gain staging.
 
     Steps:
-    1. Sum all stems: vocals + drums + bass + other
-    2. Check polarity alignment -- if cross-correlation with original is negative,
+    1. Apply per-stem mix levels (dB → linear gain)
+    2. Sum all stems: vocals + drums + bass + other
+    3. Check polarity alignment -- if cross-correlation with original is negative,
        flip the mixed signal (unlikely but safety check)
-    3. Headroom management: if peak exceeds 0.95, scale down proportionally
-    4. Return remixed AudioBuffer
+    4. Headroom management: if peak exceeds 0.95, scale down proportionally
+    5. Return remixed AudioBuffer
     """
     sr = original.sample_rate
 
@@ -26,10 +29,20 @@ def remix_stems(
     target_len = original.num_samples
     n_channels = original.num_channels
 
+    # Per-stem mix levels (0 dB = unity when mix_params is None)
+    mix_levels: dict[str, float] = {}
+    if mix_params is not None:
+        mix_levels = {
+            "drums": mix_params.drums_db,
+            "vocals": mix_params.vocals_db,
+            "bass": mix_params.bass_db,
+            "other": mix_params.other_db,
+        }
+
     # Sum all stems, aligning lengths
     mixed = np.zeros((target_len, n_channels), dtype=np.float32)
 
-    for _name, stem in stems.items():
+    for name, stem in stems.items():
         stem_data = stem.data
         # Align length
         min_len = min(target_len, stem_data.shape[0])
@@ -42,7 +55,8 @@ def remix_stems(
         elif stem_data.shape[1] > n_channels:
             stem_data = stem_data[:, :n_channels]
 
-        mixed[:min_len] += stem_data[:min_len]
+        gain = db_to_linear(mix_levels.get(name, 0.0))
+        mixed[:min_len] += stem_data[:min_len] * gain
 
     # Polarity check
     if not check_polarity(
