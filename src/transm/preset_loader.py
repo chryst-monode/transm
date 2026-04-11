@@ -1,4 +1,4 @@
-"""Preset loading, validation, and intensity scaling."""
+"""Preset loading, validation, and intensity handling."""
 
 from __future__ import annotations
 
@@ -18,29 +18,6 @@ from transm.types import (
 )
 
 _USER_PRESETS_DIR = Path.home() / ".config" / "transm" / "presets"
-
-# Fields that represent gain/boost values and should be scaled by intensity.
-# Frequencies, ratios, thresholds, Q values, widths, and ms values are NOT scaled.
-_GAIN_FIELDS: dict[str, set[str]] = {
-    "drums": {
-        "transient_attack_db",
-        "transient_sustain_db",
-        "high_shelf_gain_db",
-        "low_shelf_gain_db",
-    },
-    "vocals": {
-        "presence_gain_db",
-        "level_adjust_db",
-    },
-    "bass": {
-        "mud_cut_gain_db",
-        "harmonic_gain_db",
-    },
-    "other": {
-        "mid_boost_gain_db",
-        "high_shelf_gain_db",
-    },
-}
 
 
 def _toml_to_preset(data: dict[str, Any]) -> PresetParams:
@@ -209,37 +186,53 @@ def validate_preset(params: PresetParams) -> list[str]:
     return warnings
 
 
-def _scale_dataclass(obj: object, gain_fields: set[str], intensity: float) -> dict[str, Any]:
-    """Scale gain fields of a frozen dataclass, returning kwargs for a new instance."""
-    import dataclasses
-
-    result = {}
-    for f in dataclasses.fields(obj):  # type: ignore[arg-type]
-        value = getattr(obj, f.name)
-        if f.name in gain_fields:
-            result[f.name] = value * intensity
-        else:
-            result[f.name] = value
-    return result
-
-
 def scale_by_intensity(params: PresetParams, intensity: float) -> PresetParams:
-    """Return new PresetParams with all gain/boost values scaled by intensity.
+    """Return new PresetParams with `global_params.intensity` overridden.
 
-    Non-gain params (frequencies, ratios, thresholds) are NOT scaled.
-    The global_params.intensity is set to the new intensity value.
+    This is the single source-of-truth override for the master wetness knob.
+    Consumers read `params.global_params.intensity` at use time:
+
+    - DSP modules (drums/vocals/bass/other) multiply gain parameters by
+      `intensity` inline, so passing `intensity=0` produces an early-return
+      passthrough in each DSP stage.
+    - `Pipeline.run` scales mix-bus levels by `intensity` via `effective_mix`
+      before calling `remix_stems`, so the mix rebalance also lerps toward
+      zero as intensity drops.
+
+    The returned preset keeps gain/frequency/ratio/mix fields as-authored;
+    only `global_params.intensity` changes. This means `intensity=0` is a
+    true no-op across the full pipeline (DSP bypass + unity remix).
     """
     return PresetParams(
         name=params.name,
         description=params.description,
-        drums=DrumsParams(**_scale_dataclass(params.drums, _GAIN_FIELDS["drums"], intensity)),
-        vocals=VocalsParams(**_scale_dataclass(params.vocals, _GAIN_FIELDS["vocals"], intensity)),
-        bass=BassParams(**_scale_dataclass(params.bass, _GAIN_FIELDS["bass"], intensity)),
-        other=OtherParams(**_scale_dataclass(params.other, _GAIN_FIELDS["other"], intensity)),
+        drums=params.drums,
+        vocals=params.vocals,
+        bass=params.bass,
+        other=params.other,
         global_params=GlobalParams(
             intensity=intensity,
             target_lufs=params.global_params.target_lufs,
             target_true_peak_dbtp=params.global_params.target_true_peak_dbtp,
         ),
-        mix=params.mix,  # Mix levels are absolute balance, not scaled by intensity
+        mix=params.mix,
+    )
+
+
+def effective_mix(mix: MixParams, intensity: float) -> MixParams:
+    """Return mix-bus levels lerped toward 0 dB by `intensity`.
+
+    At `intensity=1.0`, the returned MixParams matches `mix` exactly.
+    At `intensity=0.0`, all stem dB offsets are 0 (unity gain — no rebalance).
+    At `intensity=X`, each dB offset is `X * original_db` (linear in dB).
+
+    This is the counterpart to the DSP modules' inline intensity scaling:
+    both the DSP gain fields and the mix bus participate in the same
+    wetness knob, so `intensity=0` produces a full pipeline passthrough.
+    """
+    return MixParams(
+        drums_db=mix.drums_db * intensity,
+        vocals_db=mix.vocals_db * intensity,
+        bass_db=mix.bass_db * intensity,
+        other_db=mix.other_db * intensity,
     )

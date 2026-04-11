@@ -1,18 +1,24 @@
-"""Tests for preset loading, validation, and intensity scaling."""
+"""Tests for preset loading, validation, and intensity handling."""
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from transm.preset_loader import (
+    effective_mix,
     list_presets,
     load_preset,
     scale_by_intensity,
     validate_preset,
 )
+from transm.remix import remix_stems
 from transm.types import (
+    AudioBuffer,
     DrumsParams,
+    MixParams,
     PresetParams,
+    StemSet,
 )
 
 
@@ -81,72 +87,144 @@ class TestValidatePreset:
 
 
 class TestScaleByIntensity:
-    def test_scale_by_intensity(self) -> None:
-        """Scale at 0.5 -> all gain values halved, frequencies unchanged."""
+    """`scale_by_intensity` is a pure override of `global_params.intensity`.
+
+    Under the current architecture, gain scaling is performed inline by DSP
+    modules via `params.global_params.intensity`, and mix-bus scaling is
+    performed at remix time via `effective_mix`. Both read the intensity
+    field set by this function, so there is no pre-multiplication here.
+    Older versions pre-scaled gain fields, which caused a double-scale bug
+    when the CLI `--intensity` override was used (x × intensity in
+    `scale_by_intensity` followed by × intensity again in the DSP modules).
+    """
+
+    def test_scale_by_intensity_sets_intensity_field(self) -> None:
+        """Scale at 0.5 -> only global_params.intensity changes."""
         preset = load_preset("2000s-metalcore")
         scaled = scale_by_intensity(preset, 0.5)
 
-        # Gain fields should be halved
-        assert scaled.drums.transient_attack_db == pytest.approx(3.0 * 0.5)
-        assert scaled.drums.high_shelf_gain_db == pytest.approx(-2.0 * 0.5)
-        assert scaled.drums.low_shelf_gain_db == pytest.approx(1.0 * 0.5)
-        assert scaled.vocals.presence_gain_db == pytest.approx(5.0 * 0.5)
-        assert scaled.vocals.level_adjust_db == pytest.approx(2.0 * 0.5)
-        assert scaled.bass.mud_cut_gain_db == pytest.approx(-4.0 * 0.5)
-        assert scaled.bass.harmonic_gain_db == pytest.approx(2.5 * 0.5)
-        assert scaled.other.mid_boost_gain_db == pytest.approx(4.0 * 0.5)
-        assert scaled.other.high_shelf_gain_db == pytest.approx(0.0 * 0.5)
-
-        # Mix levels should NOT be scaled by intensity
-        assert scaled.mix.drums_db == 1.5
-        assert scaled.mix.vocals_db == 2.0
-        assert scaled.mix.bass_db == 1.0
-        assert scaled.mix.other_db == 2.5
-
-        # Frequency fields should be unchanged
-        assert scaled.drums.high_shelf_freq_hz == 9000.0
-        assert scaled.drums.low_shelf_freq_hz == 80.0
-        assert scaled.vocals.deesser_freq_low_hz == 6500.0
-        assert scaled.vocals.presence_freq_hz == 3500.0
-        assert scaled.bass.hp_freq_hz == 45.0
-        assert scaled.bass.mud_cut_freq_hz == 220.0
-
-        # Ratio fields should be unchanged
-        assert scaled.drums.expander_ratio == 1.15
-        assert scaled.vocals.expander_ratio == 1.2
-        assert scaled.bass.comp_ratio == 2.0
-
-        # Global intensity should be updated
+        # Global intensity is the only changed field
         assert scaled.global_params.intensity == 0.5
-        # Target LUFS/peak should be unchanged
         assert scaled.global_params.target_lufs == -14.0
         assert scaled.global_params.target_true_peak_dbtp == -1.0
 
+    def test_scale_by_intensity_leaves_gains_unchanged(self) -> None:
+        """Gain fields are NOT pre-scaled — DSP modules apply intensity inline."""
+        preset = load_preset("2000s-metalcore")
+        scaled = scale_by_intensity(preset, 0.5)
+
+        assert scaled.drums.transient_attack_db == preset.drums.transient_attack_db
+        assert scaled.drums.high_shelf_gain_db == preset.drums.high_shelf_gain_db
+        assert scaled.drums.low_shelf_gain_db == preset.drums.low_shelf_gain_db
+        assert scaled.vocals.presence_gain_db == preset.vocals.presence_gain_db
+        assert scaled.vocals.level_adjust_db == preset.vocals.level_adjust_db
+        assert scaled.bass.mud_cut_gain_db == preset.bass.mud_cut_gain_db
+        assert scaled.bass.harmonic_gain_db == preset.bass.harmonic_gain_db
+        assert scaled.other.mid_boost_gain_db == preset.other.mid_boost_gain_db
+        assert scaled.other.high_shelf_gain_db == preset.other.high_shelf_gain_db
+
+    def test_scale_by_intensity_leaves_mix_unchanged(self) -> None:
+        """Mix fields are NOT pre-scaled — `effective_mix` scales at remix time."""
+        preset = load_preset("2000s-metalcore")
+        scaled = scale_by_intensity(preset, 0.5)
+
+        assert scaled.mix.drums_db == preset.mix.drums_db
+        assert scaled.mix.vocals_db == preset.mix.vocals_db
+        assert scaled.mix.bass_db == preset.mix.bass_db
+        assert scaled.mix.other_db == preset.mix.other_db
+
+    def test_scale_by_intensity_leaves_structural_fields_unchanged(self) -> None:
+        """Frequencies, ratios, thresholds, widths stay unchanged at any intensity."""
+        preset = load_preset("2000s-metalcore")
+        scaled = scale_by_intensity(preset, 0.5)
+
+        assert scaled.drums.high_shelf_freq_hz == 9000.0
+        assert scaled.drums.low_shelf_freq_hz == 80.0
+        assert scaled.drums.expander_ratio == 1.15
+        assert scaled.vocals.deesser_freq_low_hz == 6500.0
+        assert scaled.vocals.presence_freq_hz == 3500.0
+        assert scaled.vocals.expander_ratio == 1.2
+        assert scaled.bass.hp_freq_hz == 45.0
+        assert scaled.bass.mud_cut_freq_hz == 220.0
+        assert scaled.bass.comp_ratio == 2.0
+        assert scaled.other.stereo_width == 1.15
+
     def test_scale_by_intensity_zero(self) -> None:
-        """Scale at 0.0 -> all gains are 0, frequencies unchanged."""
+        """Scale at 0.0 -> only intensity changes; no field is zeroed here."""
         preset = load_preset("2000s-metalcore")
         scaled = scale_by_intensity(preset, 0.0)
 
-        # All gain fields should be zero
-        assert scaled.drums.transient_attack_db == 0.0
-        assert scaled.drums.transient_sustain_db == 0.0
-        assert scaled.drums.high_shelf_gain_db == 0.0
-        assert scaled.drums.low_shelf_gain_db == 0.0
-        assert scaled.vocals.presence_gain_db == 0.0
-        assert scaled.vocals.level_adjust_db == 0.0
-        assert scaled.bass.mud_cut_gain_db == 0.0
-        assert scaled.bass.harmonic_gain_db == 0.0
-        assert scaled.other.mid_boost_gain_db == 0.0
-        assert scaled.other.high_shelf_gain_db == 0.0
-
-        # Frequencies, ratios unchanged
-        assert scaled.drums.high_shelf_freq_hz == 9000.0
-        assert scaled.vocals.expander_ratio == 1.2
-        assert scaled.bass.comp_attack_ms == 30.0
-        assert scaled.other.stereo_width == 1.15
-
-        # Intensity updated
         assert scaled.global_params.intensity == 0.0
+        # Everything else is the same object content as the source preset
+        assert scaled.drums == preset.drums
+        assert scaled.vocals == preset.vocals
+        assert scaled.bass == preset.bass
+        assert scaled.other == preset.other
+        assert scaled.mix == preset.mix
+
+
+class TestEffectiveMix:
+    """`effective_mix` lerps mix-bus dB values toward 0 by intensity."""
+
+    def test_effective_mix_unity(self) -> None:
+        """At intensity=1.0, mix passes through unchanged."""
+        mix = MixParams(drums_db=1.5, vocals_db=2.0, bass_db=1.0, other_db=2.5)
+        scaled = effective_mix(mix, 1.0)
+
+        assert scaled == mix
+
+    def test_effective_mix_half(self) -> None:
+        """At intensity=0.5, all dB values are halved."""
+        mix = MixParams(drums_db=1.5, vocals_db=2.0, bass_db=1.0, other_db=2.5)
+        scaled = effective_mix(mix, 0.5)
+
+        assert scaled.drums_db == pytest.approx(0.75)
+        assert scaled.vocals_db == pytest.approx(1.0)
+        assert scaled.bass_db == pytest.approx(0.5)
+        assert scaled.other_db == pytest.approx(1.25)
+
+    def test_effective_mix_zero(self) -> None:
+        """At intensity=0.0, all dB values are zero (unity linear gain)."""
+        mix = MixParams(drums_db=1.5, vocals_db=2.0, bass_db=1.0, other_db=2.5)
+        scaled = effective_mix(mix, 0.0)
+
+        assert scaled.drums_db == 0.0
+        assert scaled.vocals_db == 0.0
+        assert scaled.bass_db == 0.0
+        assert scaled.other_db == 0.0
+
+    def test_intensity_zero_is_true_remix_passthrough(self) -> None:
+        """With `effective_mix(mix, 0.0)`, `remix_stems(sum_of_stems)` equals sum_of_stems.
+
+        This is the end-to-end contract that the master wetness knob is
+        expected to honor: at intensity=0, there is no rebalance. Without
+        `effective_mix`, a preset with any nonzero mix-bus dB value (like
+        `2000s-metalcore.toml`) would apply an audible rebalance here.
+        """
+        sr = 44100
+        n = sr  # 1 second
+        rng = np.random.default_rng(0)
+
+        def _stem() -> AudioBuffer:
+            return AudioBuffer(
+                data=(rng.standard_normal((n, 2)) * 0.05).astype(np.float32),
+                sample_rate=sr,
+            )
+
+        drums, vocals, bass, other = _stem(), _stem(), _stem(), _stem()
+        stems = StemSet(drums=drums, vocals=vocals, bass=bass, other=other)
+        original = AudioBuffer(
+            data=(drums.data + vocals.data + bass.data + other.data),
+            sample_rate=sr,
+        )
+
+        preset = load_preset("2000s-metalcore")
+        scaled_mix = effective_mix(preset.mix, 0.0)
+        remixed = remix_stems(stems, original, mix_params=scaled_mix)
+
+        # RMS difference should be zero (unity gains + in-phase stems + no clipping)
+        rms_err = float(np.sqrt(np.mean((remixed.data - original.data) ** 2)))
+        assert rms_err == pytest.approx(0.0, abs=1e-7)
 
 
 class TestLoadPresetNotFound:

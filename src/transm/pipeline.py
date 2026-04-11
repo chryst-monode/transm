@@ -14,6 +14,7 @@ from transm.dsp.drums import process_drums
 from transm.dsp.other import process_other
 from transm.dsp.vocals import process_vocals
 from transm.limiter import apply_final_limiter
+from transm.preset_loader import effective_mix
 from transm.remix import remix_stems
 from transm.separation import StemSeparator
 from transm.stem_qa import assess_stems
@@ -122,8 +123,14 @@ class Pipeline:
         )
 
         # 6. Remix
+        # Scale mix bus by intensity so it participates in the master wetness knob.
+        # At intensity=0 this yields unity gains → true passthrough together with
+        # the DSP modules' inline intensity scaling.
         _report(progress, "Remixing...", 0.88)
-        remixed = remix_stems(processed_stems, original, mix_params=self.preset.mix)
+        scaled_mix = effective_mix(
+            self.preset.mix, self.preset.global_params.intensity
+        )
+        remixed = remix_stems(processed_stems, original, mix_params=scaled_mix)
 
         # 7. Final limiting
         _report(progress, "Applying final limiter...", 0.92)
