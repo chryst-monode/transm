@@ -76,8 +76,58 @@ def get_track_metadata(track_id: str, token: str) -> TrackMetadata:
     )
 
 
+def _ensure_active_device(token: str) -> None:
+    """Activate the local Spotify device if no device is currently active.
+
+    After a Spotify restart, no device is "active" until the user manually
+    plays something.  This works around that by finding the local desktop
+    client in the device list and transferring playback to it.
+    """
+    resp = requests.get(
+        "https://api.spotify.com/v1/me/player/devices",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    devices = resp.json().get("devices", [])
+
+    if any(d.get("is_active") for d in devices):
+        return  # already have an active device
+
+    # Find the local Computer device and activate it
+    computer = next(
+        (d for d in devices if d.get("type") == "Computer"),
+        None,
+    )
+    if computer is None:
+        msg = (
+            "No Spotify desktop client found in device list. "
+            "Is Spotify open?"
+        )
+        raise RuntimeError(msg)
+
+    logger.info("Activating Spotify device: %s", computer.get("name"))
+    transfer = requests.put(
+        "https://api.spotify.com/v1/me/player",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        },
+        json={"device_ids": [computer["id"]]},
+        timeout=10,
+    )
+    transfer.raise_for_status()
+    # Give Spotify a moment to register the device as active
+    time.sleep(0.5)
+
+
 def start_playback(track_uri: str, token: str) -> None:
-    """Start playback of a track on the user's active Spotify device."""
+    """Start playback of a track on the user's active Spotify device.
+
+    Automatically activates the local device if none is active.
+    """
+    _ensure_active_device(token)
+
     resp = requests.put(
         "https://api.spotify.com/v1/me/player/play",
         headers={
